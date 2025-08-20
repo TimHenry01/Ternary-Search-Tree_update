@@ -11,31 +11,6 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# Function to show theoretical complexity analysis
-show_complexity_analysis() {
-    echo -e "${CYAN}=========================================="
-    echo "TERNARY SEARCH TREE COMPLEXITY ANALYSIS"
-    echo -e "==========================================${NC}"
-    echo ""
-    echo -e "${BLUE}Performance Characteristics${NC}"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    printf "%-12s %-15s %-15s\n" "Operation" "Average Case" "Worst Case"
-    echo "────────────────────────────────────────────────────────────"
-    printf "%-12s %-15s %-15s\n" "Insert" "O(k)" "O(n*k)"
-    printf "%-12s %-15s %-15s\n" "Search" "O(k)" "O(k)"
-    printf "%-12s %-15s %-15s\n" "Space" "O(L)" "O(L)"
-    echo ""
-    echo -e "${YELLOW}Where: n = number of words, k = word length, L = total number of characters in all words${NC}"
-    echo ""
-    echo -e "${BLUE}Explanation:${NC}"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    echo "- The implementation is not self-balancing, so worst-case insert time is O(n*k) due to linear list lookup on duplicates."
-    echo "- The search time complexity is generally proportional to the length of the key (k)."
-    echo "- Space complexity is determined by the total number of characters across all stored words."
-    echo ""
-}
-
 # Function to analyze job results from JSON file
 analyze_job_results() {
     local json_file="benchmark_results.json"
@@ -94,15 +69,12 @@ if 'comparison' in data:
 
 # Main script logic
 case "$1" in
-    -c|--complexity)
-        show_complexity_analysis
-        ;;
     -a|--analyze)
         analyze_job_results
         ;;
     *)
         echo -e "${RED}Unknown option: $1${NC}"
-        echo "Usage: $0 [-c|--complexity] [-a|--analyze]"
+        echo "Usage: $0 [-a|--analyze]"
         exit 1
         ;;
 esac
