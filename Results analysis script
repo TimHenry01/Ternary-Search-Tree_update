@@ -1,0 +1,356 @@
+#!/bin/bash
+
+# Results checking and analysis script for Ternary Search Tree benchmarks
+# This script analyzes benchmark results and generates summary reports
+
+# Color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Function to display complexity analysis
+show_complexity_analysis() {
+    echo -e "${CYAN}=========================================="
+    echo "TERNARY SEARCH TREE COMPLEXITY ANALYSIS"
+    echo -e "==========================================${NC}"
+    echo ""
+    echo -e "${BLUE}Performance Characteristics${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    printf "%-12s %-15s %-15s %-15s\n" "Operation" "Best Case" "Average Case" "Worst Case"
+    echo "────────────────────────────────────────────────────────────"
+    printf "%-12s %-15s %-15s %-15s\n" "Insert" "O(log n)" "O(log n)" "O(n)"
+    printf "%-12s %-15s %-15s %-15s\n" "Search" "O(log n)" "O(log n)" "O(n)"
+    printf "%-12s %-15s %-15s %-15s\n" "Delete" "O(log n)" "O(log n)" "O(n)"
+    printf "%-12s %-15s %-15s %-15s\n" "Prefix" "O(log n + k)" "O(log n + k)" "O(n + k)"
+    echo ""
+    echo -e "${YELLOW}Where: n = number of words, k = number of results${NC}"
+    echo ""
+    echo -e "${BLUE}Complexity Analysis${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo -e "${GREEN}Time Complexity:${NC}"
+    echo "• Best/Average Case: O(log n) for most operations due to balanced tree structure"
+    echo "• Worst Case: O(n) when tree becomes heavily unbalanced (e.g., sequential insertions)"
+    echo "• Prefix Search: O(log n + k) where k is the number of matching results"
+    echo ""
+    echo -e "${GREEN}Space Complexity:${NC}"
+    echo "• O(n) space where n is the total number of characters across all stored words"
+    echo "• Each node stores one character plus pointers to three child nodes"
+    echo "• More space-efficient than tries for overlapping prefixes"
+    echo ""
+}
+
+# Function to analyze job results
+analyze_job_results() {
+    local job_id=$1
+    
+    if [ -z "$job_id" ]; then
+        echo -e "${RED}Error: Job ID required${NC}"
+        echo "Usage: $0 JOB_ID"
+        return 1
+    fi
+    
+    local output_file="tst_benchmark_${job_id}.out"
+    local results_dir="benchmark_results_${job_id}"
+    local json_file="$results_dir/benchmark_results.json"
+    
+    echo -e "${BLUE}Analyzing results for Job ID: $job_id${NC}"
+    echo "============================================="
+    echo ""
+    
+    # Check if output file exists
+    if [ ! -f "$output_file" ]; then
+        echo -e "${RED}Output file not found: $output_file${NC}"
+        return 1
+    fi
+    
+    # Show job execution summary
+    echo -e "${GREEN}Job Execution Summary:${NC}"
+    echo "---------------------"
+    
+    if grep -q "Job completed at:" "$output_file"; then
+        echo "✓ Status: Completed Successfully"
+        local runtime=$(grep "Total runtime:" "$output_file" | cut -d: -f2-)
+        echo "✓ Runtime: $runtime"
+        
+        # Extract system info
+        local node=$(grep "Node:" "$output_file" | cut -d: -f2-)
+        local python_version=$(grep "Python version:" "$output_file" | cut -d: -f2-)
+        local memory=$(grep "Available memory:" "$output_file" | cut -d: -f2-)
+        local cpus=$(grep "Available CPUs:" "$output_file" | cut -d: -f2-)
+        
+        echo "• Node: $node"
+        echo "• Python: $python_version"
+        echo "• Memory: $memory"
+        echo "• CPUs: $cpus"
+    else
+        echo -e "${YELLOW}⚠ Status: Incomplete or Failed${NC}"
+    fi
+    echo ""
+    
+    # Analyze JSON results if available
+    if [ -f "$json_file" ]; then
+        echo -e "${GREEN}Performance Analysis:${NC}"
+        echo "--------------------"
+        
+        # Use Python to analyze JSON results
+        python3 << EOF
+import json
+import sys
+from statistics import mean
+
+try:
+    with open('$json_file', 'r') as f:
+        data = json.load(f)
+    
+    print("Scenarios Tested:", ", ".join(data.keys()))
+    print()
+    
+    for scenario in ['random', 'worst_case', 'best_case']:
+        if scenario in data and data[scenario]:
+            print(f"${GREEN}{scenario.replace('_', ' ').title()} Scenario:${NC}")
+            print("─" * 30)
+            
+            sizes = []
+            insertion_times = []
+            search_times = []
+            tree_heights = []
+            
+            for entry in data[scenario]:
+                sizes.append(entry['size'])
+                insertion_times.append(entry['insertion']['total_time'])
+                search_times.append(entry['search']['total_time'])
+                tree_heights.append(entry['insertion']['tree_height'])
+            
+            print(f"Dataset sizes: {min(sizes)} - {max(sizes)} words")
+            print(f"Insertion time range: {min(insertion_times):.4f}s - {max(insertion_times):.4f}s")
+            print(f"Search time range: {min(search_times):.4f}s - {max(search_times):.4f}s")
+            print(f"Tree height range: {min(tree_heights)} - {max(tree_heights)}")
+            
+            # Calculate scaling factors
+            if len(sizes) > 1:
+                size_factor = max(sizes) / min(sizes)
+                insertion_factor = max(insertion_times) / min(insertion_times)
+                search_factor = max(search_times) / min(search_times)
+                
+                print(f"Scaling analysis:")
+                print(f"  Size increase: {size_factor:.1f}x")
+                print(f"  Insertion time increase: {insertion_factor:.1f}x")
+                print(f"  Search time increase: {search_factor:.1f}x")
+                
+                # Complexity assessment
+                if insertion_factor < size_factor * 1.5:
+                    print("  → Insertion scaling: Good (close to logarithmic)")
+                elif insertion_factor < size_factor * 2:
+                    print("  → Insertion scaling: Acceptable")
+                else:
+                    print("  → Insertion scaling: Poor (may indicate unbalanced tree)")
+            
+            print()
+
+except Exception as e:
+    print(f"Error analyzing JSON results: {e}")
+    sys.exit(1)
+EOF
+        
+        # Check for generated plots
+        if ls "$results_dir"/*.png >/dev/null 2>&1; then
+            echo -e "${GREEN}Generated Plots:${NC}"
+            echo "---------------"
+            ls -la "$results_dir"/*.png | while read line; do
+                echo "• $(echo $line | awk '{print $9}')"
+            done
+            echo ""
+        fi
+        
+    else
+        echo -e "${YELLOW}⚠ JSON results file not found: $json_file${NC}"
+        echo ""
+    fi
+    
+    # Show error analysis if needed
+    local error_file="tst_benchmark_${job_id}.err"
+    if [ -f "$error_file" ] && [ -s "$error_file" ]; then
+        echo -e "${RED}Error Analysis:${NC}"
+        echo "---------------"
+        echo "Errors detected in job execution:"
+        cat "$error_file"
+        echo ""
+    fi
+    
+    # Show recommendations
+    echo -e "${CYAN}Recommendations:${NC}"
+    echo "----------------"
+    
+    if [ -f "$json_file" ]; then
+        python3 << EOF
+import json
+
+try:
+    with open('$json_file', 'r') as f:
+        data = json.load(f)
+    
+    recommendations = []
+    
+    # Check for worst-case performance
+    if 'worst_case' in data and data['worst_case']:
+        worst_heights = [entry['insertion']['tree_height'] for entry in data['worst_case']]
+        if worst_heights and max(worst_heights) > 50:
+            recommendations.append("Consider implementing tree balancing for worst-case scenarios")
+    
+    # Check for scaling issues
+    for scenario in data:
+        if data[scenario] and len(data[scenario]) > 1:
+            times = [entry['insertion']['total_time'] for entry in data[scenario]]
+            sizes = [entry['size'] for entry in data[scenario]]
+            
+            if len(times) > 1:
+                time_ratio = max(times) / min(times)
+                size_ratio = max(sizes) / min(sizes)
+                
+                if time_ratio > size_ratio * 3:
+                    recommendations.append(f"Performance degrades significantly in {scenario} scenario - investigate balancing")
+    
+    if not recommendations:
+        recommendations.append("Performance characteristics look good across all scenarios")
+        recommendations.append("Tree demonstrates expected logarithmic scaling behavior")
+    
+    for i, rec in enumerate(recommendations, 1):
+        print(f"{i}. {rec}")
+
+except Exception as e:
+    print("1. Verify benchmark completed successfully")
+    print("2. Check for any error messages in output")
+    print("3. Consider re-running with different parameters if needed")
+EOF
+    else
+        echo "1. Ensure benchmark completed successfully"
+        echo "2. Check for any error messages in job output"
+        echo "3. Verify all required dependencies are available on HPC system"
+    fi
+    
+    echo ""
+}
+
+# Function to compare multiple job results
+compare_jobs() {
+    echo -e "${BLUE}Comparing Multiple Job Results${NC}"
+    echo "=============================="
+    echo ""
+    
+    local job_files=(tst_benchmark_*.out)
+    
+    if [ ${#job_files[@]} -eq 0 ]; then
+        echo -e "${YELLOW}No benchmark job files found in current directory${NC}"
+        return 1
+    fi
+    
+    echo -e "${GREEN}Available benchmark jobs:${NC}"
+    for file in "${job_files[@]}"; do
+        if [ -f "$file" ]; then
+            local job_id=$(echo "$file" | sed 's/tst_benchmark_\([0-9]*\)\.out/\1/')
+            local status="Unknown"
+            
+            if grep -q "Job completed at:" "$file"; then
+                status="Completed"
+            elif grep -q "Benchmark failed" "$file"; then
+                status="Failed"
+            else
+                status="Incomplete"
+            fi
+            
+            echo "• Job $job_id: $status"
+        fi
+    done
+    echo ""
+}
+
+# Function to generate summary report
+generate_report() {
+    local job_id=$1
+    local report_file="benchmark_report_${job_id}.txt"
+    
+    echo -e "${BLUE}Generating comprehensive report...${NC}"
+    
+    {
+        echo "TERNARY SEARCH TREE BENCHMARK REPORT"
+        echo "===================================="
+        echo "Generated: $(date)"
+        echo "Job ID: $job_id"
+        echo ""
+        
+        show_complexity_analysis
+        echo ""
+        
+        analyze_job_results "$job_id"
+        
+    } > "$report_file"
+    
+    echo -e "${GREEN}Report generated: $report_file${NC}"
+}
+
+# Main script execution
+main() {
+    case "$1" in
+        -c|--complexity)
+            show_complexity_analysis
+            ;;
+        -a|--analyze)
+            if [ -z "$2" ]; then
+                echo -e "${RED}Error: Job ID required for analysis${NC}"
+                echo "Usage: $0 -a JOB_ID"
+                exit 1
+            fi
+            analyze_job_results "$2"
+            ;;
+        -r|--report)
+            if [ -z "$2" ]; then
+                echo -e "${RED}Error: Job ID required for report generation${NC}"
+                echo "Usage: $0 -r JOB_ID"
+                exit 1
+            fi
+            generate_report "$2"
+            ;;
+        -l|--list)
+            compare_jobs
+            ;;
+        -h|--help)
+            echo "Ternary Search Tree Results Analysis Script"
+            echo "Usage: $0 [OPTION] [JOB_ID]"
+            echo ""
+            echo "Options:"
+            echo "  -c, --complexity    Show complexity analysis"
+            echo "  -a, --analyze       Analyze specific job results"
+            echo "  -r, --report        Generate comprehensive report"
+            echo "  -l, --list          List all benchmark jobs"
+            echo "  -h, --help          Show this help"
+            echo ""
+            echo "Examples:"
+            echo "  $0 -c               Show complexity analysis"
+            echo "  $0 -a 12345         Analyze job 12345"
+            echo "  $0 -r 12345         Generate report for job 12345"
+            ;;
+        "")
+            # Default: show complexity and list jobs
+            show_complexity_analysis
+            echo ""
+            compare_jobs
+            ;;
+        *)
+            # Assume it's a job ID
+            if [[ "$1" =~ ^[0-9]+$ ]]; then
+                analyze_job_results "$1"
+            else
+                echo -e "${RED}Unknown option: $1${NC}"
+                echo "Use $0 -h for help"
+                exit 1
+            fi
+            ;;
+    esac
+}
+
+# Run main function with all arguments
+main "$@"

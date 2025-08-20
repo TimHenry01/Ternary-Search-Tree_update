@@ -1,0 +1,50 @@
+============================================================
+TERNARY SEARCH TREE PERFORMANCE ANALYSIS REPORT
+============================================================
+
+INSERT PERFORMANCE:
+--------------------
+    100 words: 0.0007s (145183 words/sec)
+    500 words: 0.0045s (112213 words/sec)
+   1000 words: 0.0119s (84296 words/sec)
+   2000 words: 0.0367s (54454 words/sec)
+   5000 words: 0.1895s (26392 words/sec)
+  10000 words: 0.7215s (13861 words/sec)
+
+SEARCH PERFORMANCE:
+-------------------
+    100 words: 0.0002s (563319 searches/sec)
+    500 words: 0.0008s (597623 searches/sec)
+   1000 words: 0.0019s (518147 searches/sec)
+   2000 words: 0.0040s (498193 searches/sec)
+   5000 words: 0.0105s (477632 searches/sec)
+  10000 words: 0.0243s (411503 searches/sec)
+
+WORST CASE SCENARIOS:
+---------------------
+  Sequential:
+    Insert: 0.0108s
+    Search: 0.0002s
+
+COMPARISON WITH BUILT-IN STRUCTURES:
+-------------------------------------
+  TST    - Insert: 0.1841s, Search: 0.0113s
+  Set    - Insert: 0.0004s, Search: 0.0001s
+  List   - Insert: 0.1638s, Search: 0.1610s
+
+THEORETICAL COMPLEXITY ANALYSIS:
+--------------------------------
+  Insert:
+    Best case:    O(log n)
+    Average case: O(log n)
+    Worst case:   O(n)
+  Search:
+    Best case:    O(log n)
+    Average case: O(log n)
+    Worst case:   O(n)
+
+NOTES:
+- Insert/search times are influenced by input distribution.
+- Memory usage is measured using tracemalloc and may vary per run.
+- List structure suffers on search due to linear lookup time.
+- TST is optimized for prefix and near-prefix retrievals.

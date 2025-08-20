@@ -1,0 +1,270 @@
+#!/bin/bash
+
+# Job monitoring script for Ternary Search Tree benchmarks
+# This script provides various utilities for monitoring SLURM jobs
+
+# Color codes for better output formatting
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Function to display help
+show_help() {
+    echo "Ternary Search Tree Job Monitoring Script"
+    echo "Usage: $0 [OPTION] [JOB_ID]"
+    echo ""
+    echo "Options:"
+    echo "  -s, --status      Show current job status"
+    echo "  -q, --queue       Show all jobs in queue"
+    echo "  -r, --results     Show results for specific job ID"
+    echo "  -w, --watch       Watch job status (updates every 30 seconds)"
+    echo "  -c, --cancel      Cancel specific job"
+    echo "  -l, --log         Show job log in real-time"
+    echo "  -h, --help        Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $0 -s 12345       Show status of job 12345"
+    echo "  $0 -q             Show all your jobs"
+    echo "  $0 -r 12345       Show results of completed job 12345"
+    echo "  $0 -w             Watch all your jobs"
+}
+
+# Function to check job status
+check_job_status() {
+    local job_id=$1
+    
+    if [ -z "$job_id" ]; then
+        echo -e "${YELLOW}Showing all your jobs:${NC}"
+        squeue -u $USER --format="%.10i %.15j %.8T %.10M %.6D %.20S %.20e"
+    else
+        echo -e "${BLUE}Status for job $job_id:${NC}"
+        squeue -j $job_id --format="%.10i %.15j %.8T %.10M %.6D %.20S %.20e"
+        
+        # Check if job exists
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Job $job_id not found in queue. It may have completed or been cancelled.${NC}"
+            
+            # Try to find output files
+            if ls tst_benchmark_${job_id}.out 2>/dev/null; then
+                echo -e "${GREEN}Found output file: tst_benchmark_${job_id}.out${NC}"
+                echo "Use '$0 -r $job_id' to view results"
+            fi
+        fi
+    fi
+}
+
+# Function to show job queue
+show_queue() {
+    echo -e "${YELLOW}Current job queue for user $USER:${NC}"
+    echo ""
+    squeue -u $USER --format="%.10i %.15j %.8T %.10M %.6D %.20S %.20e"
+    
+    # Show summary
+    local running=$(squeue -u $USER -t RUNNING | wc -l)
+    local pending=$(squeue -u $USER -t PENDING | wc -l)
+    local total=$(squeue -u $USER | wc -l)
+    
+    # Subtract 1 for header line
+    running=$((running - 1))
+    pending=$((pending - 1))
+    total=$((total - 1))
+    
+    echo ""
+    echo -e "${BLUE}Summary:${NC}"
+    echo "  Running: $running"
+    echo "  Pending: $pending"
+    echo "  Total: $total"
+}
+
+# Function to show job results
+show_results() {
+    local job_id=$1
+    
+    if [ -z "$job_id" ]; then
+        echo -e "${RED}Error: Job ID required for results display${NC}"
+        echo "Usage: $0 -r JOB_ID"
+        return 1
+    fi
+    
+    local output_file="tst_benchmark_${job_id}.out"
+    local error_file="tst_benchmark_${job_id}.err"
+    local results_dir="benchmark_results_${job_id}"
+    
+    echo -e "${BLUE}Results for job $job_id:${NC}"
+    echo "========================================"
+    
+    # Check if output file exists
+    if [ -f "$output_file" ]; then
+        echo -e "${GREEN}Job output file found: $output_file${NC}"
+        echo ""
+        
+        # Show job completion status
+        if grep -q "Job completed at:" "$output_file"; then
+            echo -e "${GREEN}✓ Job completed successfully${NC}"
+            local start_time=$(grep "Start Time:" "$output_file" | cut -d: -f2-)
+            local end_time=$(grep "Job completed at:" "$output_file" | cut -d: -f2-)
+            local runtime=$(grep "Total runtime:" "$output_file" | cut -d: -f2-)
+            
+            echo "Start time: $start_time"
+            echo "End time: $end_time"
+            echo "Runtime: $runtime"
+        else
+            echo -e "${YELLOW}⚠ Job may still be running or failed${NC}"
+        fi
+        
+        echo ""
+        echo -e "${BLUE}Performance Summary:${NC}"
+        echo "----------------------------------------"
+        
+        # Extract performance metrics if available
+        if grep -q "Benchmark completed successfully" "$output_file"; then
+            # Show key performance metrics
+            echo "Benchmark execution completed successfully"
+            
+            # Look for generated files in results directory
+            if [ -d "$results_dir" ]; then
+                echo -e "${GREEN}Results directory found: $results_dir${NC}"
+                echo "Contents:"
+                ls -la "$results_dir/" 2>/dev/null | head -10
+                
+                # Show JSON results summary if available
+                local json_file="$results_dir/benchmark_results.json"
+                if [ -f "$json_file" ]; then
+                    echo ""
+                    echo -e "${BLUE}Performance Data Available:${NC}"
+                    echo "JSON results file: $json_file"
+                    # Show basic stats
+                    python3 -c "
+import json
+try:
+    with open('$json_file', 'r') as f:
+        data = json.load(f)
+    print('Scenarios tested:', list(data.keys()))
+    for scenario in data:
+        if data[scenario]:
+            sizes = [entry['size'] for entry in data[scenario]]
+            print(f'{scenario}: {min(sizes)} - {max(sizes)} words tested')
+except:
+    print('Could not parse JSON results')
+" 2>/dev/null
+                fi
+            fi
+        else
+            echo -e "${RED}Benchmark may have failed - check error file${NC}"
+        fi
+        
+        echo ""
+        echo -e "${BLUE}Last 20 lines of output:${NC}"
+        echo "----------------------------------------"
+        tail -20 "$output_file"
+        
+    else
+        echo -e "${RED}Output file not found: $output_file${NC}"
+        echo "Job may not have started or completed yet."
+    fi
+    
+    # Check error file
+    if [ -f "$error_file" ]; then
+        if [ -s "$error_file" ]; then
+            echo ""
+            echo -e "${RED}Error file contains messages:${NC}"
+            echo "----------------------------------------"
+            cat "$error_file"
+        fi
+    fi
+}
+
+# Function to watch jobs
+watch_jobs() {
+    echo -e "${YELLOW}Watching jobs for user $USER (Press Ctrl+C to stop)${NC}"
+    echo "Updates every 30 seconds..."
+    echo ""
+    
+    while true; do
+        clear
+        echo "=== Job Monitor - $(date) ==="
+        show_queue
+        echo ""
+        echo -e "${BLUE}Press Ctrl+C to stop monitoring${NC}"
+        sleep 30
+    done
+}
+
+# Function to cancel job
+cancel_job() {
+    local job_id=$1
+    
+    if [ -z "$job_id" ]; then
+        echo -e "${RED}Error: Job ID required for cancellation${NC}"
+        echo "Usage: $0 -c JOB_ID"
+        return 1
+    fi
+    
+    echo -e "${YELLOW}Cancelling job $job_id...${NC}"
+    scancel $job_id
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Job $job_id cancelled successfully${NC}"
+    else
+        echo -e "${RED}Failed to cancel job $job_id${NC}"
+    fi
+}
+
+# Function to show real-time log
+show_log() {
+    local job_id=$1
+    
+    if [ -z "$job_id" ]; then
+        echo -e "${RED}Error: Job ID required for log display${NC}"
+        echo "Usage: $0 -l JOB_ID"
+        return 1
+    fi
+    
+    local output_file="tst_benchmark_${job_id}.out"
+    
+    if [ -f "$output_file" ]; then
+        echo -e "${BLUE}Following log for job $job_id (Press Ctrl+C to stop):${NC}"
+        echo "File: $output_file"
+        echo "========================================"
+        tail -f "$output_file"
+    else
+        echo -e "${RED}Log file not found: $output_file${NC}"
+        echo "Job may not have started yet."
+    fi
+}
+
+# Main script logic
+case "$1" in
+    -s|--status)
+        check_job_status "$2"
+        ;;
+    -q|--queue)
+        show_queue
+        ;;
+    -r|--results)
+        show_results "$2"
+        ;;
+    -w|--watch)
+        watch_jobs
+        ;;
+    -c|--cancel)
+        cancel_job "$2"
+        ;;
+    -l|--log)
+        show_log "$2"
+        ;;
+    -h|--help)
+        show_help
+        ;;
+    "")
+        # Default action: show queue
+        show_queue
+        ;;
+    *)
+        echo -e "${RED}Unknown option: $1${NC}"
+        show_help
+        exit 1
+        ;;
+esac
